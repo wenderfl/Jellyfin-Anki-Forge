@@ -1,0 +1,12 @@
+media
+**/bin/
+**/obj/
+.devcontainer/jellyfin/
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/*.tsbuildinfo
+frontend/node_modules/.tmp/
+artifacts/
+dotnet/
+.ignored
