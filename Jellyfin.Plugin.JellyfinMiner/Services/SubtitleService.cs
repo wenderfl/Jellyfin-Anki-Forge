@@ -122,8 +122,9 @@ public sealed class SubtitleService
             }
 
             args.AddRange(["-f", "webvtt", output]);
-            if (!await FfmpegHelper.RunAsync(_mediaEncoder, _logger, "subtitle conversion", [.. args], cancellationToken).ConfigureAwait(false)
-                || !File.Exists(output))
+            var result = await FfmpegHelper.RunAsync(_mediaEncoder, _logger, "subtitle conversion", [.. args], cancellationToken)
+                .ConfigureAwait(false);
+            if (!result.Succeeded || !File.Exists(output))
             {
                 throw new SubtitleUnavailableException("FFmpeg could not convert the subtitle track.");
             }

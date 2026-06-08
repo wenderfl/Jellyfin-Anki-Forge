@@ -177,7 +177,7 @@ public sealed partial class MediaExtractionService
         string output,
         CueTimeRange range,
         ImageMediaConfig config,
-        string? avifEncoder)
+        FfmpegEncoderResult? avifEncoder)
     {
         var start = config.Animated ? range.StartSeconds : (range.StartSeconds + range.EndSeconds) / 2;
         var duration = Math.Min(range.DurationSeconds, MaxAnimatedImageDurationSeconds);
@@ -229,9 +229,16 @@ public sealed partial class MediaExtractionService
         return [.. args];
     }
 
-    private static void AddAvifEncoderArgs(List<string> args, ImageMediaConfig config, string? avifEncoder)
+    private static void AddAvifEncoderArgs(List<string> args, ImageMediaConfig config, FfmpegEncoderResult? avifEncoder)
     {
-        var encoder = avifEncoder ?? throw new MediaExtractionException(
+        if (avifEncoder is { FailureKind: FfmpegFailureKind.EncoderUnavailable or FfmpegFailureKind.ProcessFailed } failed)
+        {
+            throw new MediaExtractionException(
+                "media_generation_failed",
+                BuildFfmpegFailureMessage(new FfmpegRunResult(false, failed.FailureKind, string.Empty)));
+        }
+
+        var encoder = avifEncoder?.Encoder ?? throw new MediaExtractionException(
             "media_generation_failed",
             "FFmpeg does not provide a supported AV1 encoder for AVIF output.");
         args.AddRange(["-c:v", encoder, "-crf", config.Quality.ToString(CultureInfo.InvariantCulture)]);
@@ -302,19 +309,31 @@ public sealed partial class MediaExtractionService
         return [.. args];
     }
 
-    private async Task<string?> ResolveAvifEncoderAsync(CancellationToken cancellationToken)
+    private async Task<FfmpegEncoderResult> ResolveAvifEncoderAsync(CancellationToken cancellationToken)
         => await FfmpegHelper.FindFirstEncoderAsync(_mediaEncoder, _logger, AvifEncoderPreference, cancellationToken)
             .ConfigureAwait(false);
 
     private async Task RunFfmpegAsync(string[] args, string output, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(_tempDirectory);
-        if (!await FfmpegHelper.RunAsync(_mediaEncoder, _logger, "media extraction", args, cancellationToken).ConfigureAwait(false)
-            || !File.Exists(output))
+        var result = await FfmpegHelper.RunAsync(_mediaEncoder, _logger, "media extraction", args, cancellationToken)
+            .ConfigureAwait(false);
+        if (!result.Succeeded || !File.Exists(output))
         {
-            throw new MediaExtractionException("media_generation_failed", "FFmpeg could not generate the requested media.");
+            throw new MediaExtractionException(
+                "media_generation_failed",
+                BuildFfmpegFailureMessage(result));
         }
     }
+
+    private static string BuildFfmpegFailureMessage(FfmpegRunResult result)
+        => result.FailureKind switch
+        {
+            FfmpegFailureKind.EncoderUnavailable =>
+                "Jellyfin could not find a configured FFmpeg encoder path. Check Jellyfin's Playback > Transcoding settings, then restart Jellyfin.",
+            _ =>
+                "FFmpeg could not generate the requested media. Check the Jellyfin server logs for details."
+        };
 
     private static async Task<MediaResponse> ReadResponseAsync(
         string mediaType,
@@ -438,6 +457,7 @@ public sealed partial class MediaExtractionService
 
     [GeneratedRegex("^(-?\\d+):(-?\\d+)$", RegexOptions.Compiled)]
     private static partial Regex SizeRegex();
+
 }
 
 public sealed record CueTimeRange(int StartCueIndex, int EndCueIndex, double StartSeconds, double EndSeconds)

@@ -91,18 +91,22 @@ export function useAnkiMining(options: UseAnkiMiningOptions) {
 
       if (anki.audioField) {
         const audio = await options.requestAudio(range.first, range.last);
-        if (audio) {
-          const storedFilename = await storeMediaFile(audio.FileNameHint, audio.DataBase64);
-          updates[anki.audioField] = `[sound:${storedFilename || audio.FileNameHint}]`;
+        if (!audio) {
+          return;
         }
+
+        const storedFilename = await storeMediaFile(audio.FileNameHint, audio.DataBase64);
+        updates[anki.audioField] = `[sound:${storedFilename || audio.FileNameHint}]`;
       }
 
       if (anki.imageField) {
         const image = await options.requestImage(range.first, range.last);
-        if (image) {
-          const storedFilename = await storeMediaFile(image.FileNameHint, image.DataBase64);
-          updates[anki.imageField] = `<img src="${storedFilename || image.FileNameHint}">`;
+        if (!image) {
+          return;
         }
+
+        const storedFilename = await storeMediaFile(image.FileNameHint, image.DataBase64);
+        updates[anki.imageField] = `<img src="${storedFilename || image.FileNameHint}">`;
       }
 
       if (Object.keys(updates).length === 0) {
