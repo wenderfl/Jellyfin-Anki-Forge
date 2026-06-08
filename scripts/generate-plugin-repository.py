@@ -6,6 +6,7 @@ import re
 import shutil
 import urllib.request
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -61,6 +62,14 @@ def github_asset_md5(asset_url, token):
     return digest.hexdigest()
 
 
+def file_md5(path):
+    digest = hashlib.md5()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def copy_icon(package, output_dir):
     icon_path = output_dir / "icons" / "icon-512.png"
     icon_path.parent.mkdir(parents=True, exist_ok=True)
@@ -107,6 +116,20 @@ def release_versions(repository, target_abi, token):
     return sorted(versions, key=lambda item: version_key(item["version"]), reverse=True)
 
 
+def current_release_version(repository, current_version, target_abi, package):
+    tag = os.environ.get("GITHUB_REF_NAME") or f"v{current_version}"
+    asset_name = f"jellyfin-miner-{current_version}.zip"
+
+    return {
+        "version": current_version,
+        "changelog": "Jellyfin Miner release.",
+        "targetAbi": target_abi,
+        "sourceUrl": f"https://github.com/{repository}/releases/download/{tag}/{asset_name}",
+        "checksum": file_md5(package),
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.0000000Z"),
+    }
+
+
 def main():
     package = Path(require_env("PACKAGE"))
     repository = require_env("GITHUB_REPOSITORY")
@@ -124,7 +147,8 @@ def main():
     versions = release_versions(repository, target_abi, token)
 
     if current_version not in {item["version"] for item in versions}:
-        raise SystemExit(f"Current release {current_version} was not found in GitHub Releases")
+        versions.append(current_release_version(repository, current_version, target_abi, package))
+        versions.sort(key=lambda item: version_key(item["version"]), reverse=True)
 
     manifest = [dict(PLUGIN, imageUrl=f"{base_url}/icons/icon-512.png", versions=versions)]
     (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

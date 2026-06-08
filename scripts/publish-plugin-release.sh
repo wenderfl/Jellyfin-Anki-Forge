@@ -17,8 +17,16 @@ cat > "${notes_file}" <<EOF
 Install: download \`${ASSET_NAME}\`, extract the \`Jellyfin Miner/\` folder into your Jellyfin plugins directory, then restart Jellyfin.
 EOF
 
-gh release create "${GITHUB_REF_NAME}" "${PACKAGE}" \
-  --title "Jellyfin Miner ${PLUGIN_VERSION}" \
-  --notes-file "${notes_file}" \
-  --latest \
-  --verify-tag
+if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+  gh release upload "${GITHUB_REF_NAME}" "${PACKAGE}" --clobber
+  gh release edit "${GITHUB_REF_NAME}" \
+    --title "Jellyfin Miner ${PLUGIN_VERSION}" \
+    --notes-file "${notes_file}" \
+    --latest
+else
+  gh release create "${GITHUB_REF_NAME}" "${PACKAGE}" \
+    --title "Jellyfin Miner ${PLUGIN_VERSION}" \
+    --notes-file "${notes_file}" \
+    --latest \
+    --verify-tag
+fi
