@@ -231,11 +231,11 @@ public sealed partial class MediaExtractionService
 
     private static void AddAvifEncoderArgs(List<string> args, ImageMediaConfig config, FfmpegEncoderResult? avifEncoder)
     {
-        if (avifEncoder?.FailureKind is FfmpegFailureKind.EncoderUnavailable or FfmpegFailureKind.ProcessFailed)
+        if (avifEncoder is { FailureKind: FfmpegFailureKind.EncoderUnavailable or FfmpegFailureKind.ProcessFailed } failed)
         {
             throw new MediaExtractionException(
                 "media_generation_failed",
-                BuildFfmpegFailureMessage(new FfmpegRunResult(false, avifEncoder.FailureKind, string.Empty)));
+                BuildFfmpegFailureMessage(new FfmpegRunResult(false, failed.FailureKind, string.Empty)));
         }
 
         var encoder = avifEncoder?.Encoder ?? throw new MediaExtractionException(
