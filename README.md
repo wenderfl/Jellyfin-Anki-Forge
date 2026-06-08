@@ -12,6 +12,10 @@ Only watching locally with mpv? Check out [mpv-subtitleminer](https://github.com
 
 ## Installation
 
+### Requirements
+
+- Jellyfin server 10.11.9 or newer
+
 ### Plugin Repository
 
 Add this repository URL in Jellyfin:
