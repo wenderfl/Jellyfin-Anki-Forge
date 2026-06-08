@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*.*.*.*"
   workflow_dispatch:
 
 permissions:
@@ -12,7 +14,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: jellyfin-subtitleminer-latest-release
+  group: jellyfin-subtitleminer-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -24,9 +26,11 @@ jobs:
   build-plugin:
     name: Build installable plugin
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      asset_name: ${{ steps.version.outputs.asset_name }}
+      is_release: ${{ steps.version.outputs.is_release }}
+      package: ${{ steps.version.outputs.package }}
+      version: ${{ steps.version.outputs.version }}
 
     steps:
       - name: Check out repository
@@ -52,163 +56,54 @@ jobs:
       - name: Check frontend
         run: npm run check --prefix frontend
 
+      - name: Resolve build version
+        id: version
+        run: scripts/resolve-plugin-version.sh
+
       - name: Build plugin package
-        run: scripts/jellyfin.sh package
-
-      - name: Resolve package metadata
-        id: package
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          project="Jellyfin.Plugin.JellyfinMiner/Jellyfin.Plugin.JellyfinMiner.csproj"
-          version="$(dotnet msbuild "${project}" -nologo -getProperty:Version)"
-          package="artifacts/jellyfin-miner-${version}.zip"
-
-          if [[ ! -f "${package}" ]]; then
-            echo "Expected plugin package was not found: ${package}" >&2
-            exit 1
-          fi
-
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "package=${package}" >> "${GITHUB_OUTPUT}"
-          echo "asset_name=$(basename "${package}")" >> "${GITHUB_OUTPUT}"
-
-      - name: Validate plugin package contents
         env:
-          PACKAGE: ${{ steps.package.outputs.package }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          listing="$(mktemp)"
-          unzip -l "${PACKAGE}" > "${listing}"
-
-          grep -F "Jellyfin Miner/Jellyfin.Plugin.JellyfinMiner.dll" "${listing}"
-          grep -F "Jellyfin Miner/meta.json" "${listing}"
-          grep -F "Jellyfin Miner/wwwroot/index.html" "${listing}"
-          grep -F "Jellyfin Miner/wwwroot/manifest.webmanifest" "${listing}"
-          grep -F "Jellyfin Miner/wwwroot/icons/icon-192.png" "${listing}"
-          grep -F "Jellyfin Miner/wwwroot/icons/icon-512.png" "${listing}"
-          grep -F "Jellyfin Miner/wwwroot/icons/icon-maskable-512.png" "${listing}"
-          grep -F "Jellyfin Miner/wwwroot/icons/apple-touch-icon.png" "${listing}"
-          grep -E "Jellyfin Miner/wwwroot/assets/index-[^ ]+\.js" "${listing}"
-          grep -E "Jellyfin Miner/wwwroot/assets/index-[^ ]+\.css" "${listing}"
+          PLUGIN_VERSION: ${{ steps.version.outputs.version }}
+        run: scripts/jellyfin.sh package
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jellyfin-miner-${{ steps.package.outputs.version }}
-          path: ${{ steps.package.outputs.package }}
+          name: jellyfin-miner-${{ steps.version.outputs.version }}
+          path: ${{ steps.version.outputs.package }}
           if-no-files-found: error
+
+  release-plugin:
+    name: Publish release and repository manifest
+    needs: build-plugin
+    if: needs.build-plugin.outputs.is_release == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download plugin package
+        uses: actions/download-artifact@v4
+        with:
+          name: jellyfin-miner-${{ needs.build-plugin.outputs.version }}
+          path: artifacts
+
+      - name: Publish versioned release
+        env:
+          ASSET_NAME: ${{ needs.build-plugin.outputs.asset_name }}
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE: ${{ needs.build-plugin.outputs.package }}
+          PLUGIN_VERSION: ${{ needs.build-plugin.outputs.version }}
+        run: scripts/publish-plugin-release.sh
 
       - name: Prepare plugin repository
         env:
-          PACKAGE: ${{ steps.package.outputs.package }}
-          ASSET_NAME: ${{ steps.package.outputs.asset_name }}
-          PLUGIN_VERSION: ${{ steps.package.outputs.version }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          repository_dir="artifacts/plugin-repository"
-          repository_base_url="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
-          checksum="$(md5sum "${PACKAGE}" | awk '{print $1}')"
-          timestamp="$(date -u +"%Y-%m-%dT%H:%M:%S.0000000Z")"
-
-          rm -rf "${repository_dir}"
-          mkdir -p "${repository_dir}/icons"
-          cp "${PACKAGE}" "${repository_dir}/${ASSET_NAME}"
-          cp "frontend/dist/icons/icon-512.png" "${repository_dir}/icons/icon-512.png"
-
-          export ASSET_NAME
-          export PLUGIN_VERSION
-          export TARGET_ABI
-          export repository_base_url
-          export checksum
-          export timestamp
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          base_url = os.environ["repository_base_url"].rstrip("/")
-          asset_name = os.environ["ASSET_NAME"]
-          manifest = [
-              {
-                  "guid": "8e947a62-b5e1-4d6a-a70c-486996db901f",
-                  "name": "Jellyfin Miner",
-                  "description": "Follow Jellyfin subtitles and mine selected cues to Anki with screenshots and audio.",
-                  "overview": "Subtitle follower and Anki mining tool for Jellyfin playback sessions.",
-                  "owner": "friedrich-de",
-                  "category": "General",
-                  "imageUrl": f"{base_url}/icons/icon-512.png",
-                  "versions": [
-                      {
-                          "version": os.environ["PLUGIN_VERSION"],
-                          "changelog": "Self-contained Jellyfin Miner plugin with Vue frontend and Anki mining support.",
-                          "targetAbi": os.environ["TARGET_ABI"],
-                          "sourceUrl": f"{base_url}/{asset_name}",
-                          "checksum": os.environ["checksum"],
-                          "timestamp": os.environ["timestamp"],
-                      }
-                  ],
-              }
-          ]
-
-          output = Path("artifacts/plugin-repository/manifest.json")
-          output.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-          PY
-
-      - name: Validate plugin repository contents
-        env:
-          ASSET_NAME: ${{ steps.package.outputs.asset_name }}
-          PACKAGE: ${{ steps.package.outputs.package }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          repository_base_url="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
-          checksum="$(md5sum "${PACKAGE}" | awk '{print $1}')"
-          test -f "artifacts/plugin-repository/manifest.json"
-          test -f "artifacts/plugin-repository/${ASSET_NAME}"
-          test -f "artifacts/plugin-repository/icons/icon-512.png"
-          python3 -m json.tool "artifacts/plugin-repository/manifest.json" > /dev/null
-          grep -F "${repository_base_url}/${ASSET_NAME}" "artifacts/plugin-repository/manifest.json"
-          grep -F "\"checksum\": \"${checksum}\"" "artifacts/plugin-repository/manifest.json"
-
-      - name: Publish latest release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PACKAGE: ${{ steps.package.outputs.package }}
-          ASSET_NAME: ${{ steps.package.outputs.asset_name }}
-          PLUGIN_VERSION: ${{ steps.package.outputs.version }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -f latest "${GITHUB_SHA}"
-          git push origin refs/tags/latest --force
-
-          notes_file="$(mktemp)"
-          cat > "${notes_file}" <<EOF
-          ## Jellyfin Miner
-
-          - Plugin version: ${PLUGIN_VERSION}
-          - Target Jellyfin ABI: ${TARGET_ABI}
-
-          Install: download \`${ASSET_NAME}\`, extract the \`Jellyfin Miner/\` folder into your Jellyfin plugins directory, then restart Jellyfin.
-          EOF
-
-          gh release create latest "${PACKAGE}" \
-            --title "Jellyfin Miner" \
-            --notes-file "${notes_file}" \
-            --latest \
-            --verify-tag
+          CURRENT_VERSION: ${{ needs.build-plugin.outputs.version }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PACKAGE: ${{ needs.build-plugin.outputs.package }}
+        run: scripts/generate-plugin-repository.py
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
@@ -220,6 +115,18 @@ jobs:
         with:
           path: artifacts/plugin-repository
 
+  deploy-pages:
+    name: Deploy plugin repository
+    needs:
+      - build-plugin
+      - release-plugin
+    if: needs.build-plugin.outputs.is_release == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
       - name: Deploy plugin repository to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

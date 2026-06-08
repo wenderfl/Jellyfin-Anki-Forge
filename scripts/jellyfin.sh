@@ -24,6 +24,7 @@ Environment:
   JELLYFIN_RUNTIME_ROOT             Override the local Jellyfin runtime path.
   JELLYFIN_MINER_BUILD_FRONTEND=0   Skip frontend build during sync.
   CONFIGURATION=Release            Override package publish configuration.
+  PLUGIN_VERSION=1.2.3.4           Override package and assembly version.
   TARGET_ABI=10.11.9.0             Override package meta target ABI.
 EOF
 }
@@ -93,7 +94,12 @@ package_plugin() {
   local version
   local zip
 
-  version="$(dotnet msbuild "${PROJECT}" -nologo -getProperty:Version)"
+  version="${PLUGIN_VERSION:-$(dotnet msbuild "${PROJECT}" -nologo -getProperty:Version)}"
+  if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Plugin version must be a four-part version like 1.2.3.4; got: ${version}" >&2
+    exit 1
+  fi
+
   zip="${ARTIFACTS}/jellyfin-miner-${version}.zip"
 
   rm -rf "${staging}" "${zip}"
@@ -101,7 +107,15 @@ package_plugin() {
 
   npm ci --prefix "${FRONTEND}"
   npm run build --prefix "${FRONTEND}"
-  dotnet publish "${PROJECT}" -c "${configuration}" -o "${ARTIFACTS}/publish" --no-self-contained
+  dotnet publish "${PROJECT}" \
+    -c "${configuration}" \
+    -o "${ARTIFACTS}/publish" \
+    --no-self-contained \
+    -p:Version="${version}" \
+    -p:AssemblyVersion="${version}" \
+    -p:FileVersion="${version}" \
+    -p:InformationalVersion="${version}" \
+    -p:IncludeSourceRevisionInInformationalVersion=false
 
   cp "${ARTIFACTS}/publish/Jellyfin.Plugin.JellyfinMiner.dll" "${staging}/"
   find "${ARTIFACTS}/publish" -maxdepth 1 -name 'Jellyfin.Plugin.JellyfinMiner.pdb' -exec cp {} "${staging}/" \;
@@ -120,7 +134,7 @@ package_plugin() {
   "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%S.0000000Z")",
   "version": "${version}",
   "status": "Active",
-  "autoUpdate": false,
+  "autoUpdate": true,
   "assemblies": []
 }
 EOF
