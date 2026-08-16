@@ -14,10 +14,7 @@
 
 > **Note**: This is a modified fork of the original [jellyfin-subtitleminer](https://github.com/friedrich-de/jellyfin-subtitleminer) project by `friedrich-de` (originally named Jellyfin Miner). This fork alters the AnkiConnect behavior to **always create new notes** instead of modifying the most recent one.
 
-Watch on any Jellyfin client (TV, mobile, web) and create media Anki cards on any Yomitan client (desktop, mobile) - finally making mining media from your couch a reality!
-
-https://github.com/user-attachments/assets/53bc0616-00ec-4f39-9e75-83e54fddaeb1
-
+Watch on any Jellyfin client — TV, phone, or web — and make media Anki cards on desktop or mobile. Yep, you can finally mine media straight from the couch!
 ---
 
 ## <img src="https://img.icons8.com/color/48/sparkling.png" width="24" height="24" align="center" /> Features
