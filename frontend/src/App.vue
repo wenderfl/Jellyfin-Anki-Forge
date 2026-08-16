@@ -79,8 +79,6 @@
 
     <SelectionBar
       :selected-count="selectedCueIndexes.size"
-      :target-preview="targetCardPreview"
-      :loading-target="loadingTargetCard"
       :anki-configured="ankiConfigured"
       :can-send="canSendToAnki"
       :sending="sendingToAnki"
@@ -198,20 +196,20 @@ const {
   toast,
 });
 
+const sourceContext = computed(() => manifest.value?.ItemName ?? null);
+
 const {
-  targetCardPreview,
-  loadingTargetCard,
   sendingToAnki,
   ankiConfigured,
   canSendToAnki,
   sendSelectionToAnki,
-  resetTargetPreview,
 } = useAnkiMining({
   settings,
   selectedCueIndexes,
   selectedCueCount,
   selectedRange,
   selectedCues,
+  sourceContext,
   requestAudio,
   requestImage,
   clearSelection,
@@ -230,7 +228,6 @@ const selectionAudioLoading = computed(() => {
 watch([selectedSessionId, selectedTrackIndex], () => {
   clearSelection();
   clearMedia();
-  resetTargetPreview();
 });
 
 watch(auth, (nextAuth) => {
@@ -274,7 +271,6 @@ function requestSelectionAudio(): void {
 function saveSettings(nextSettings: MinerSettings): void {
   persistSettings(nextSettings);
   clearMedia();
-  resetTargetPreview();
   showSettings.value = false;
   toast.success('Mining settings saved.');
 }

@@ -1,68 +1,53 @@
 <template>
   <Teleport to="body">
     <div class="modal-overlay" @click.self="emit('cancel')">
-      <section
-        class="settings-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-title"
-      >
+      <section class="modal settings-modal" role="dialog" aria-modal="true" aria-label="Settings">
         <header class="modal-header">
-          <div>
-            <p>Mining</p>
-            <h2 id="settings-title">Settings</h2>
-          </div>
-          <button
-            class="icon-button"
-            type="button"
-            aria-label="Close settings"
-            @click="emit('cancel')"
-          >
-            <X :size="18" />
+          <h2>Mining settings</h2>
+          <button class="icon-button" type="button" aria-label="Close" @click="emit('cancel')">
+            <X :size="20" />
           </button>
         </header>
 
         <div class="modal-body">
           <section class="settings-section">
             <div class="section-heading">
-              <h3>AnkiConnect</h3>
-              <button
-                class="secondary-action"
-                type="button"
-                :disabled="connectionStatus === 'testing'"
-                @click="testConnection"
-              >
-                <LoaderCircle v-if="connectionStatus === 'testing'" class="spin" :size="16" />
-                <PlugZap v-else :size="16" />
-                <span>{{ connectionStatus === 'testing' ? 'Testing' : 'Test' }}</span>
-              </button>
-            </div>
-
-            <div class="connection-status" :data-state="connectionStatus">
-              <span class="dot" aria-hidden="true"></span>
-              <span>{{ connectionLabel }}</span>
-            </div>
-          </section>
-
-          <section class="settings-section">
-            <div class="section-heading">
-              <h3>Card fields</h3>
+              <h3>Anki Connect</h3>
               <button
                 class="secondary-action ghost"
                 type="button"
-                :disabled="connectionStatus !== 'connected'"
-                @click="loadModels"
+                :class="{ testing: connectionStatus === 'testing' }"
+                :disabled="connectionStatus === 'testing'"
+                @click="testConnection"
               >
-                <RefreshCw :size="16" />
-                <span>Reload</span>
+                <RefreshCw v-if="connectionStatus === 'testing'" class="spin" :size="16" />
+                <PlugZap v-else :size="16" />
+                <span>Test</span>
               </button>
             </div>
-
-            <div v-if="connectionStatus !== 'connected'" class="settings-empty">
-              Connect to AnkiConnect to load note types and fields.
+            <div
+              class="connection-status"
+              :class="{
+                error: connectionStatus === 'error',
+                success: connectionStatus === 'connected',
+              }"
+            >
+              {{ connectionLabel }}
             </div>
+            <div v-if="connectionStatus === 'connected'" class="anki-settings">
+              <label class="field compact">
+                <span>Deck</span>
+                <select
+                  :value="localSettings.anki.deckName"
+                  @change="updateAnkiField('deckName', $event)"
+                >
+                  <option value="">Select...</option>
+                  <option v-for="deck in deckNames" :key="deck" :value="deck">
+                    {{ deck }}
+                  </option>
+                </select>
+              </label>
 
-            <div v-else class="settings-grid">
               <label class="field compact">
                 <span>Note type</span>
                 <select :value="localSettings.anki.noteType" @change="onModelChange">
@@ -74,13 +59,13 @@
               </label>
 
               <label class="field compact">
-                <span>Front field</span>
+                <span>Source field</span>
                 <select
-                  :value="localSettings.anki.frontField"
+                  :value="localSettings.anki.sourceField"
                   :disabled="!localSettings.anki.noteType"
-                  @change="updateAnkiField('frontField', $event)"
+                  @change="updateAnkiField('sourceField', $event)"
                 >
-                  <option value="">Select...</option>
+                  <option value="">Skip</option>
                   <option v-for="field in availableFields" :key="field" :value="field">
                     {{ field }}
                   </option>
@@ -102,17 +87,30 @@
               </label>
 
               <label class="field compact">
-                <span>Audio field</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                  <span>Audio fields</span>
+                  <button 
+                    type="button" 
+                    class="secondary-action ghost" 
+                    style="padding: 2px 6px; font-size: 11px; height: auto;"
+                    :disabled="!localSettings.anki.noteType"
+                    @click="selectAllAudioFields"
+                  >
+                    Select All
+                  </button>
+                </div>
                 <select
-                  :value="localSettings.anki.audioField"
+                  multiple
+                  :value="localSettings.anki.audioFields"
                   :disabled="!localSettings.anki.noteType"
-                  @change="updateAnkiField('audioField', $event)"
+                  @change="updateAnkiMultiField('audioFields', $event)"
+                  size="3"
                 >
-                  <option value="">Skip</option>
                   <option v-for="field in availableFields" :key="field" :value="field">
                     {{ field }}
                   </option>
                 </select>
+                <small class="hint">Hold Ctrl/Cmd to select multiple</small>
               </label>
 
               <label class="field compact">
@@ -127,17 +125,6 @@
                     {{ field }}
                   </option>
                 </select>
-              </label>
-
-              <label class="field compact">
-                <span>Max card age (minutes)</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  :value="localSettings.anki.maxCardAgeMinutes"
-                  @input="updateMaxCardAge"
-                />
               </label>
             </div>
           </section>
@@ -174,9 +161,9 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
-import { LoaderCircle, PlugZap, RefreshCw, RotateCcw, X } from '@lucide/vue';
+import { PlugZap, RefreshCw, RotateCcw, X } from '@lucide/vue';
 
-import { getModelsWithFields, getVersion } from '@/api/ankiConnect';
+import { getModelsWithFields, getVersion, getDeckNames } from '@/api/ankiConnect';
 import type { AnkiSettings, MinerSettings } from '@/lib/minerSettings';
 import { defaultMinerSettings } from '@/lib/minerSettings';
 
@@ -192,15 +179,15 @@ const emit = defineEmits<{
 }>();
 
 type ConnectionStatus = 'untested' | 'testing' | 'connected' | 'error';
-type FieldSetting = 'frontField' | 'sentenceField' | 'audioField' | 'imageField';
+type FieldSetting = 'sourceField' | 'sentenceField' | 'imageField';
 
 const DEFAULT_NOTE_TYPE = 'Lapis';
 const DEFAULT_FIELDS: Record<FieldSetting, string> = {
-  frontField: 'Expression',
+  sourceField: '',
   sentenceField: 'Sentence',
-  audioField: 'SentenceAudio',
   imageField: 'Picture',
 };
+const DEFAULT_AUDIO_FIELDS = ['SentenceAudio'];
 
 const localSettings = reactive<MinerSettings>({
   anki: { ...props.settings.anki },
@@ -210,19 +197,22 @@ const connectionStatus = ref<ConnectionStatus>('untested');
 const connectionError = ref<string | null>(null);
 const ankiVersion = ref<number | null>(null);
 const modelsWithFields = ref<Record<string, string[]>>({});
+const deckNames = ref<string[]>([]);
 
 const modelNames = computed(() => Object.keys(modelsWithFields.value).sort());
 const availableFields = computed(() =>
   localSettings.anki.noteType ? (modelsWithFields.value[localSettings.anki.noteType] ?? []) : [],
 );
+
 const settingsValid = computed(() => {
   const anki = localSettings.anki;
-  if (!anki.noteType) {
-    return true;
+  if (!anki.noteType || !anki.deckName) {
+    return false;
   }
 
-  return Boolean(anki.sentenceField || anki.audioField || anki.imageField);
+  return Boolean(anki.sentenceField || (anki.audioFields && anki.audioFields.length > 0) || anki.imageField);
 });
+
 const connectionLabel = computed(() => {
   if (connectionStatus.value === 'connected') {
     return `Connected to AnkiConnect v${ankiVersion.value}`;
@@ -253,7 +243,12 @@ async function testConnection(): Promise<void> {
 }
 
 async function loadModels(): Promise<void> {
-  modelsWithFields.value = await getModelsWithFields();
+  const [fetchedModels, fetchedDecks] = await Promise.all([
+    getModelsWithFields(),
+    getDeckNames(),
+  ]);
+  modelsWithFields.value = fetchedModels;
+  deckNames.value = fetchedDecks.sort();
   applyAnkiDefaults();
 }
 
@@ -262,9 +257,9 @@ function onModelChange(event: Event): void {
   localSettings.anki = {
     ...localSettings.anki,
     noteType,
-    frontField: '',
+    sourceField: '',
     sentenceField: '',
-    audioField: '',
+    audioFields: [],
     imageField: '',
   };
   applyFieldDefaults(noteType);
@@ -277,12 +272,18 @@ function updateAnkiField(field: keyof AnkiSettings, event: Event): void {
   };
 }
 
-function updateMaxCardAge(event: Event): void {
-  const value = Number((event.target as HTMLInputElement).value);
+function updateAnkiMultiField(field: keyof AnkiSettings, event: Event): void {
+  const select = event.target as HTMLSelectElement;
+  const values = Array.from(select.selectedOptions).map(opt => opt.value);
   localSettings.anki = {
     ...localSettings.anki,
-    maxCardAgeMinutes: Number.isFinite(value) ? Math.max(0, value) : 0,
+    [field]: values,
   };
+}
+
+function selectAllAudioFields(): void {
+  if (!localSettings.anki.noteType) return;
+  localSettings.anki.audioFields = [...availableFields.value];
 }
 
 function resetMedia(): void {
@@ -294,6 +295,10 @@ function applyAnkiDefaults(): void {
     localSettings.anki.noteType = DEFAULT_NOTE_TYPE;
   }
 
+  if (!localSettings.anki.deckName && deckNames.value.includes('Default')) {
+    localSettings.anki.deckName = 'Default';
+  }
+
   applyFieldDefaults(localSettings.anki.noteType);
 }
 
@@ -302,9 +307,69 @@ function applyFieldDefaults(noteType: string): void {
   for (const [setting, fieldName] of Object.entries(DEFAULT_FIELDS) as Array<
     [FieldSetting, string]
   >) {
-    if (!localSettings.anki[setting] && fields.includes(fieldName)) {
-      localSettings.anki[setting] = fieldName;
+    if (fieldName && !(localSettings.anki as any)[setting] && fields.includes(fieldName)) {
+      (localSettings.anki as any)[setting] = fieldName;
+    }
+  }
+  
+  if (localSettings.anki.audioFields.length === 0) {
+    const defaultAudio = DEFAULT_AUDIO_FIELDS.filter(f => fields.includes(f));
+    if (defaultAudio.length > 0) {
+      localSettings.anki.audioFields = defaultAudio;
     }
   }
 }
 </script>
+
+
+
+<style scoped>
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--line);
+  transition: .2s;
+  border-radius: 20px;
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .2s;
+  border-radius: 50%;
+}
+input:checked + .slider {
+  background-color: var(--teal);
+}
+@media (max-width: 800px) {
+  input:checked + .slider {
+    background-color: var(--accent);
+  }
+}
+input:checked + .slider:before {
+  transform: translateX(16px);
+}
+input:disabled + .slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+</style>

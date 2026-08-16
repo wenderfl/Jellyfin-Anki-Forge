@@ -16,11 +16,11 @@ public sealed class Plugin : BasePlugin<BasePluginConfiguration>
     {
     }
 
-    public override string Name => "Jellyfin Miner";
+    public override string Name => "Jellyfin Anki Forge";
 
-    public override string Description => "Mining tool for Jellyfin";
+    public override string Description => "Follow Jellyfin subtitles and forge Anki cards.";
 
-    public override Guid Id => Guid.Parse("8e947a62-b5e1-4d6a-a70c-486996db901f");
+    public override Guid Id => Guid.Parse("a38dbbf4-ac67-49d8-9194-1340efab7afe");
 }
 
 public sealed class PluginServiceRegistrator : IPluginServiceRegistrator
@@ -48,3 +48,4 @@ internal sealed class SessionMonitorHostedService(Services.SessionMonitorService
         return Task.CompletedTask;
     }
 }
+

@@ -13,12 +13,12 @@ export interface MediaSettings {
 }
 
 export interface AnkiSettings {
+  deckName: string;
   noteType: string;
-  frontField: string;
+  sourceField: string;
   sentenceField: string;
-  audioField: string;
+  audioFields: string[];
   imageField: string;
-  maxCardAgeMinutes: number;
 }
 
 export interface MinerSettings {
@@ -28,12 +28,12 @@ export interface MinerSettings {
 
 export const defaultMinerSettings: MinerSettings = {
   anki: {
+    deckName: '',
     noteType: '',
-    frontField: '',
+    sourceField: '',
     sentenceField: '',
-    audioField: '',
+    audioFields: [],
     imageField: '',
-    maxCardAgeMinutes: 5,
   },
   media: {
     audioOffsetStart: 0.25,
@@ -68,15 +68,24 @@ export function saveMinerSettings(settings: MinerSettings): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
 }
 
-function mergeSettings(settings: Partial<MinerSettings>): MinerSettings {
+function mergeSettings(settings: any): MinerSettings {
+  const anki = {
+    ...defaultMinerSettings.anki,
+    ...(settings.anki || {}),
+  };
+
+  if (settings.anki && typeof settings.anki.audioField === 'string' && settings.anki.audioField !== '') {
+    anki.audioFields = [settings.anki.audioField];
+    delete anki.audioField;
+  } else if (!anki.audioFields) {
+    anki.audioFields = [];
+  }
+
   return {
-    anki: {
-      ...defaultMinerSettings.anki,
-      ...settings.anki,
-    },
+    anki,
     media: {
       ...defaultMinerSettings.media,
-      ...settings.media,
+      ...(settings.media || {}),
     },
   };
 }

@@ -87,6 +87,10 @@ export async function getVersion(): Promise<number> {
   return invoke<number>('version');
 }
 
+export async function getDeckNames(): Promise<string[]> {
+  return invoke<string[]>('deckNames');
+}
+
 async function getModelNames(): Promise<string[]> {
   return invoke<string[]>('modelNames');
 }
@@ -109,51 +113,39 @@ export async function getModelsWithFields(): Promise<Record<string, string[]>> {
   return modelsWithFields;
 }
 
-async function findNotes(query: string): Promise<number[]> {
-  return invoke<number[]>('findNotes', { query });
-}
-
-async function getNotesInfo(notes: number[]): Promise<NoteInfo[]> {
-  return invoke<NoteInfo[]>('notesInfo', { notes });
-}
-
-async function getRecentNotes(count = 10, modelName?: string): Promise<NoteInfo[]> {
-  let query = 'added:1';
-  if (modelName) {
-    query = `"note:${modelName}" added:1`;
-  }
-
-  let noteIds = await findNotes(query);
-  if (noteIds.length === 0) {
-    query = modelName ? `"note:${modelName}" added:7` : 'added:7';
-    noteIds = await findNotes(query);
-  }
-
-  if (noteIds.length === 0) {
-    return [];
-  }
-
-  return getNotesInfo([...noteIds].sort((a, b) => a - b).slice(-count));
-}
-
-export async function getLastNote(modelName?: string): Promise<NoteInfo | null> {
-  const notes = await getRecentNotes(1, modelName);
-  return notes[0] ?? null;
-}
-
 export async function storeMediaFile(filename: string, data: string): Promise<string> {
   return invoke<string>('storeMediaFile', { filename, data });
 }
 
-export async function updateNoteFields(
-  noteId: number,
+export interface AnkiMedia {
+  filename: string;
+  data: string;
+  fields: string[];
+}
+
+export async function addNote(
+  deckName: string,
+  modelName: string,
   fields: Record<string, string>,
-): Promise<null> {
-  return invoke<null>('updateNoteFields', {
-    note: { id: noteId, fields },
+  audio?: AnkiMedia[],
+  picture?: AnkiMedia[]
+): Promise<number> {
+  return invoke<number>('addNote', {
+    note: {
+      deckName,
+      modelName,
+      fields,
+      audio,
+      picture,
+      options: {
+        allowDuplicate: true,
+      },
+    } as any,
   });
 }
 
 export async function guiBrowse(query: string): Promise<number[]> {
   return invoke<number[]>('guiBrowse', { query });
 }
+
+

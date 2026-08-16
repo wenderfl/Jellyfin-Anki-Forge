@@ -3,9 +3,7 @@
     <div class="selection-summary">
       <template v-if="selectedCount > 0">
         <span class="selection-count">{{ selectedCount }} selected</span>
-        <span v-if="loadingTarget" class="target-preview">Loading target...</span>
-        <span v-else-if="targetPreview" class="target-preview">{{ targetPreview }}</span>
-        <span v-else-if="ankiConfigured" class="target-preview warning">No recent target</span>
+        <span v-if="!ankiConfigured" class="target-preview warning">Anki not configured</span>
       </template>
       <span v-else>Click subtitle rows to mine them.</span>
     </div>
@@ -67,8 +65,6 @@ import { Image as ImageIcon, LoaderCircle, Send, Settings, Volume2, X } from '@l
 
 defineProps<{
   selectedCount: number;
-  targetPreview: string | null;
-  loadingTarget: boolean;
   ankiConfigured: boolean;
   canSend: boolean;
   sending: boolean;

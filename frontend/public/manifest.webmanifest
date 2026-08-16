@@ -1,6 +1,6 @@
 {
-  "name": "Jellyfin Miner",
-  "short_name": "Miner",
+  "name": "Jellyfin Anki Forge",
+  "short_name": "Anki Forge",
   "description": "Follow Jellyfin subtitles and mine selected cues to Anki.",
   "id": "./",
   "start_url": ".",
