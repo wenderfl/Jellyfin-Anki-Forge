@@ -25,9 +25,6 @@ https://github.com/user-attachments/assets/53bc0616-00ec-4f39-9e75-83e54fddaeb1
 - **Seamless Integration:** Extracts subtitle cues and their corresponding screenshots and audio clips from your media directly within Jellyfin.
 - **1-Click Anki Cards:** Automatically maps sentence, audio, image, and the media source title to your Anki fields.
 - **Always Fresh:** Creates a *brand new note* in Anki for each mining action, perfect for batch mining vocabulary.
-
-*(Only watching locally with mpv? Check out [mpv-subtitleminer](https://github.com/friedrich-de/mpv-subtitleminer) instead.)*
-
 ---
 
 ## <img src="https://img.icons8.com/color/48/download--v1.png" width="24" height="24" align="center" /> Installation
@@ -36,23 +33,7 @@ https://github.com/user-attachments/assets/53bc0616-00ec-4f39-9e75-83e54fddaeb1
 - **Jellyfin server** `10.11.9` or newer
 - **Anki** with the **AnkiConnect** add-on installed
 
-### 1. Plugin Repository Install (Recommended)
-Add the following repository URL in your Jellyfin dashboard (replace `YOUR_USERNAME` with your GitHub username):
-```text
-https://YOUR_USERNAME.github.io/jellyfin-subtitleminer/manifest.json
-```
-
-1. Open the **Jellyfin Dashboard**.
-2. Go to **Plugins** > **Repositories**.
-3. Add the repository URL above.
-4. Open the **Catalog** tab.
-5. Install **Jellyfin Anki Forge**.
-6. **Restart** your Jellyfin server.
-
-After restarting, access the plugin at:
-`https://your-jellyfin-server/Plugins/JellyfinMiner/`
-
-### 2. Manual Install
+### Manual Install
 1. Download the latest plugin `.zip` from the GitHub Releases page of this fork.
 2. Extract the `Jellyfin Miner/` folder into your Jellyfin `plugins/` directory.
 3. Restart Jellyfin.
